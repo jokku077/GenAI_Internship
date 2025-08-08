@@ -1,0 +1,9 @@
+fastapi
+numpy~=2.2.5
+pymongo~=4.12.1
+scikit-learn~=1.6.1
+scipy~=1.15.3
+google~=3.0.0
+google-genai
+protobuf~=6.30.2
+langchain-google-genai~=2.1.4
