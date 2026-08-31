@@ -1,3 +1,7 @@
+"""Scratch script for experimenting with Gemini embeddings and cosine similarity.
+
+Not part of the application runtime; used for manual, ad-hoc testing.
+"""
 from google import genai
 import os
 from sklearn.metrics.pairwise import cosine_similarity

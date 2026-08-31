@@ -1,3 +1,4 @@
+"""Handlers implementing CRUD and similarity-search operations on the chatbot knowledge base."""
 from utils.db_utils import chat_db
 from models.admin import ConfirmationResponse, AddNewQA, FindSimilarQA, UpdateQA
 from handlers.embeddings_handler import EmbeddingsGenerator
@@ -7,12 +8,18 @@ from handlers.score_handler import ScoreCalculator
 from utils.db_utils import DbFetcher
 
 class DbHandler:
+    """Encapsulates database operations for the chatbot Q&A collection."""
+
     def __init__(self):
         self.collection = chat_db
 
-    # handler to add question
-                                            # this is type annotation, it is not necessary but it is a good practice to add this for clarity to specify return type
     def add_question_handler(self, request) -> ConfirmationResponse:
+        """Insert a new Q&A entry with generated embeddings.
+
+        Raises:
+            HTTPException: 409 if `request.new_index` already exists;
+                500 if embedding generation or the insert fails.
+        """
         # Check if index already exists
         existing = self.collection.find_one({"index": request.new_index})
         if existing:
@@ -42,9 +49,15 @@ class DbHandler:
             index=request.new_index,
         )
 
-    # handler to find similar question
+    def find_similar_question_handler(self, request):
+        """Find the knowledge-base question most similar to the search query.
 
-    def find_similar_question_handler(self, request) :
+        Returns:
+            dict with the matched question, its index, and the similarity score.
+
+        Raises:
+            HTTPException: 404 if the matched question is not found in the database.
+        """
         questions = DbFetcher.fetch_questions()
         scores = ScoreCalculator.calculate_scores(request.search_query)
         max_score_index = scores.argmax(axis=0)
@@ -63,6 +76,12 @@ class DbHandler:
         }
 
     def delete_question_handler(self, index) -> ConfirmationResponse:
+        """Delete the question at the given index.
+
+        Raises:
+            HTTPException: 404 if no question exists at `index`;
+                500 if the delete fails.
+        """
         document = self.collection.find_one({"index": index})
         if not document:
             raise HTTPException(status_code=404, detail=f"Question with index {index} not found")
@@ -74,6 +93,16 @@ class DbHandler:
             raise HTTPException(status_code=500, detail="Failed to delete the question")
 
     def update_question_handler(self, index, update_data) -> ConfirmationResponse:
+        """Update the question and/or answer at the given index.
+
+        Regenerates embeddings only if the document already has an
+        `embeddings` field and the question text is being changed. Does not
+        raise if no update data is provided or nothing changed; returns a
+        message instead.
+
+        Raises:
+            HTTPException: 404 if no question exists at `index`.
+        """
         document = self.collection.find_one({"index": index})
         if not document:
             raise HTTPException(status_code=404, detail=f"Question with index {index} not found")
