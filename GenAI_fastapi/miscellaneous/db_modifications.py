@@ -1,3 +1,9 @@
+"""One-off migration script for backfilling `index` and `embeddings` fields
+on existing knowledge-base documents.
+
+The actual migration loops are currently commented out below; running this
+module as-is only opens the DB connection and embeddings client.
+"""
 import pymongo
 import logging
 client = pymongo.MongoClient(

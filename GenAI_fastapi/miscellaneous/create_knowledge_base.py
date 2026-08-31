@@ -1,7 +1,13 @@
+"""One-off script that seeds the MongoDB knowledge base with sample Q&A pairs.
+
+Runs on import: creates a text index on `question` and inserts the sample
+data set below into the `chatbotdb` collection.
+"""
 import pymongo
 from datetime import datetime
 
 def create_chatbot_knowledge_base():
+    """Create the text index and populate the knowledge base collection with sample Q&A data."""
     client = pymongo.MongoClient(
         "mongodb+srv://jokku7110:jokkumongoatlas@cluster0.7s1xk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
         tls=True,

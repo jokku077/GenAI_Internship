@@ -1,46 +1,44 @@
 name: Graphify graph sync
 
-# Builds/updates graphify-out/ (code-only AST graph + community clustering) and
-# commits it directly to BOTH branches involved in the PR: the head (source)
-# branch and the base (target) branch. Runs once, when the PR is opened.
+# Builds/updates graphify-out/ (code-only AST graph + community clustering).
+#
+# - pull_request (opened): commits straight to the PR's head/source branch
+#   only. That branch's own updated graphify-out then merges into the base
+#   branch (main) as a normal part of the PR — no separate write to main here,
+#   so there's no risk of two independent CI writes conflicting with each
+#   other in graph.json/manifest.json.
+# - push to main: safety net for code that lands on main without going
+#   through a PR that ran this workflow (direct pushes, forked PRs where the
+#   head job below is skipped). Only writer touching main, so no conflict risk.
 #
 # NOTES before you paste this into another repo:
-# - Pushing straight to the base branch bypasses normal PR review. If the base
-#   branch (e.g. main) has branch protection that blocks direct pushes, the
-#   "base" leg of the matrix will fail — that's intentional, not swallowed.
-#   Loosen protection for the github-actions bot, or drop the base leg from the
-#   matrix below if you don't want that behavior.
-# - If the PR comes from a fork, GITHUB_TOKEN cannot push to the fork's branch.
-#   The head leg is skipped automatically in that case (see the guard step).
+# - If the PR comes from a fork, GITHUB_TOKEN cannot push to the fork's head
+#   branch. The pull_request job is skipped automatically in that case (see
+#   the guard step) — the push-to-main job still catches it once merged.
 on:
   pull_request:
     types: [opened]
+  push:
+    branches: [main]
   workflow_dispatch: {}
 
 permissions:
   contents: write
 
+concurrency:
+  group: graphify-sync-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  graphify:
+  graphify-pr-head:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: head
-            branch: ${{ github.event.pull_request.head.ref }}
-          - label: base
-            branch: ${{ github.event.pull_request.base.ref }}
-    concurrency:
-      group: graphify-sync-${{ matrix.branch }}
-      cancel-in-progress: false
     steps:
       - name: Guard against forked PR head (no push rights)
         id: guard
         run: |
-          if [ "${{ matrix.label }}" = "head" ] && \
-             [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-            echo "PR head is from a fork (${{ github.event.pull_request.head.repo.full_name }}) — GITHUB_TOKEN cannot push there. Skipping." 
+          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "PR head is from a fork (${{ github.event.pull_request.head.repo.full_name }}) — GITHUB_TOKEN cannot push there. Skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -49,7 +47,7 @@ jobs:
       - uses: actions/checkout@v4
         if: steps.guard.outputs.skip != 'true'
         with:
-          ref: ${{ matrix.branch }}
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - uses: actions/setup-python@v5
         if: steps.guard.outputs.skip != 'true'
@@ -75,8 +73,41 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add graphify-out/graph.json graphify-out/graph.html graphify-out/GRAPH_REPORT.md graphify-out/manifest.json
           if git diff --staged --quiet; then
-            echo "graphify-out is already up to date on ${{ matrix.branch }}"
+            echo "graphify-out is already up to date on ${{ github.event.pull_request.head.ref }}"
           else
             git commit -m "chore(graphify): update graphify-out [skip ci]"
-            git push origin HEAD:${{ matrix.branch }}
+            git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          fi
+
+  graphify-main:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install graphify
+        run: pip install graphifyy
+
+      - name: Build code graph (AST-only, no LLM key required)
+        run: graphify extract . --code-only
+
+      - name: Cluster communities (no LLM naming)
+        run: graphify cluster-only . --no-label
+
+      - name: Commit and push graphify-out
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add graphify-out/graph.json graphify-out/graph.html graphify-out/GRAPH_REPORT.md graphify-out/manifest.json
+          if git diff --staged --quiet; then
+            echo "graphify-out is already up to date on main"
+          else
+            git commit -m "chore(graphify): update graphify-out [skip ci]"
+            git push origin HEAD:main
           fi
