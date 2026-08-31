@@ -1,0 +1,82 @@
+name: Graphify graph sync
+
+# Builds/updates graphify-out/ (code-only AST graph + community clustering) and
+# commits it directly to BOTH branches involved in the PR: the head (source)
+# branch and the base (target) branch. Runs once, when the PR is opened.
+#
+# NOTES before you paste this into another repo:
+# - Pushing straight to the base branch bypasses normal PR review. If the base
+#   branch (e.g. main) has branch protection that blocks direct pushes, the
+#   "base" leg of the matrix will fail — that's intentional, not swallowed.
+#   Loosen protection for the github-actions bot, or drop the base leg from the
+#   matrix below if you don't want that behavior.
+# - If the PR comes from a fork, GITHUB_TOKEN cannot push to the fork's branch.
+#   The head leg is skipped automatically in that case (see the guard step).
+on:
+  pull_request:
+    types: [opened]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  graphify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: head
+            branch: ${{ github.event.pull_request.head.ref }}
+          - label: base
+            branch: ${{ github.event.pull_request.base.ref }}
+    concurrency:
+      group: graphify-sync-${{ matrix.branch }}
+      cancel-in-progress: false
+    steps:
+      - name: Guard against forked PR head (no push rights)
+        id: guard
+        run: |
+          if [ "${{ matrix.label }}" = "head" ] && \
+             [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "PR head is from a fork (${{ github.event.pull_request.head.repo.full_name }}) — GITHUB_TOKEN cannot push there. Skipping." 
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          ref: ${{ matrix.branch }}
+
+      - uses: actions/setup-python@v5
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          python-version: "3.11"
+
+      - name: Install graphify
+        if: steps.guard.outputs.skip != 'true'
+        run: pip install graphifyy
+
+      - name: Build code graph (AST-only, no LLM key required)
+        if: steps.guard.outputs.skip != 'true'
+        run: graphify extract . --code-only
+
+      - name: Cluster communities (no LLM naming)
+        if: steps.guard.outputs.skip != 'true'
+        run: graphify cluster-only . --no-label
+
+      - name: Commit and push graphify-out
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add graphify-out/graph.json graphify-out/graph.html graphify-out/GRAPH_REPORT.md graphify-out/manifest.json
+          if git diff --staged --quiet; then
+            echo "graphify-out is already up to date on ${{ matrix.branch }}"
+          else
+            git commit -m "chore(graphify): update graphify-out [skip ci]"
+            git push origin HEAD:${{ matrix.branch }}
+          fi
