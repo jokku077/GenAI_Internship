@@ -182,11 +182,17 @@ jobs:
             '"Diff:\n" + $diff + "\n\nImpacted callers (unchanged files that depend on the changed code):\n" + $context + "\n\nDoes this diff break any of the impacted callers shown above? Reply with a single first line that is exactly BREAKS or SAFE, then a short explanation on the following lines."'
           )
           BODY=$(jq -n --arg prompt "$PROMPT" '{contents: [{parts: [{text: $prompt}]}]}')
-          RESPONSE=$(curl -s -X POST \
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GEMINI_API_KEY" \
+          HTTP_STATUS=$(curl -s -o response.json -w "%{http_code}" -X POST \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=$GEMINI_API_KEY" \
             -H "Content-Type: application/json" \
             -d "$BODY")
-          VERDICT_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // "SAFE (no response from Gemini)"')
+          VERDICT_TEXT=$(jq -r '.candidates[0].content.parts[0].text // empty' response.json)
+          # a failed/empty call must surface as ERROR, not silently pass as SAFE
+          if [ "$HTTP_STATUS" != "200" ] || [ -z "$VERDICT_TEXT" ]; then
+            echo "::warning::Gemini call failed (HTTP $HTTP_STATUS) or returned no candidates — raw response below"
+            cat response.json
+            VERDICT_TEXT=$'ERROR\nGemini call failed with HTTP '"$HTTP_STATUS"$' or returned no candidates; see job logs for the raw response.'
+          fi
           echo "$VERDICT_TEXT" > verdict.txt
           cat verdict.txt
           echo "verdict=$(head -n1 verdict.txt | tr -d '[:space:]')" >> "$GITHUB_OUTPUT"
