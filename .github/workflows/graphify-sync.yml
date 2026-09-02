@@ -111,3 +111,84 @@ jobs:
             git commit -m "chore(graphify): update graphify-out [skip ci]"
             git push origin HEAD:main
           fi
+
+  # Fails the check if Gemini judges the diff likely to break one of the
+  # callers/importers the committed graph says depend on the changed files.
+  # Needs graphify-pr-head so it reads the freshly rebuilt graph.json, not a
+  # stale one. Structural blast-radius lookup is free (jq against graph.json);
+  # only the compatibility judgment itself calls Gemini. Requires a
+  # GEMINI_API_KEY repo secret. This only re-runs on `opened`, matching
+  # graphify-pr-head above — add `synchronize` to both triggers if you want it
+  # to re-check every new push to the PR, not just the first one.
+  graphify-impact-check:
+    if: github.event_name == 'pull_request'
+    needs: graphify-pr-head
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Find changed files
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+          git diff --name-only "origin/${{ github.event.pull_request.base.ref }}...HEAD" \
+            -- '*.py' '*.ts' '*.js' > changed_files.txt
+          echo "Changed files:"; cat changed_files.txt
+
+      - name: Find impacted callers via the committed graph
+        run: |
+          : > impacted.txt
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            node_ids=$(jq -r --arg f "$file" '.nodes[] | select(.source_file == $f) | .id' graphify-out/graph.json)
+            for id in $node_ids; do
+              jq -r --arg id "$id" '
+                .links[]
+                | select((.target == $id or .source == $id)
+                         and (.relation == "calls" or .relation == "imports" or .relation == "imports_from"))
+                | (.source_file // empty)
+              ' graphify-out/graph.json
+            done
+          done < changed_files.txt | sort -u > impacted.txt
+          echo "Impacted files:"; cat impacted.txt
+
+      - name: Build diff + impacted-caller context
+        run: |
+          git diff "origin/${{ github.event.pull_request.base.ref }}...HEAD" -- $(cat changed_files.txt) > pr.diff
+          : > context.txt
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            echo "=== $file ===" >> context.txt
+            cat "$file" >> context.txt
+          done < impacted.txt
+
+      - name: Ask Gemini whether the diff breaks any impacted caller
+        id: judge
+        run: |
+          PROMPT=$(jq -n \
+            --rawfile diff pr.diff \
+            --rawfile context context.txt \
+            '"Diff:\n" + $diff + "\n\nImpacted callers (unchanged files that depend on the changed code):\n" + $context + "\n\nDoes this diff break any of the impacted callers shown above? Reply with a single first line that is exactly BREAKS or SAFE, then a short explanation on the following lines."'
+          )
+          BODY=$(jq -n --arg prompt "$PROMPT" '{contents: [{parts: [{text: $prompt}]}]}')
+          RESPONSE=$(curl -s -X POST \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GEMINI_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$BODY")
+          VERDICT_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // "SAFE (no response from Gemini)"')
+          echo "$VERDICT_TEXT" > verdict.txt
+          cat verdict.txt
+          echo "verdict=$(head -n1 verdict.txt | tr -d '[:space:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Fail check if a break was flagged
+        if: steps.judge.outputs.verdict == 'BREAKS'
+        run: |
+          echo "::error::Gemini flagged a likely breaking change:"
+          cat verdict.txt
+          exit 1
