@@ -2,19 +2,21 @@ name: Graphify graph sync
 
 # Builds/updates graphify-out/ (code-only AST graph + community clustering).
 #
-# - pull_request (opened): commits straight to the PR's head/source branch
-#   only. That branch's own updated graphify-out then merges into the base
-#   branch (main) as a normal part of the PR — no separate write to main here,
-#   so there's no risk of two independent CI writes conflicting with each
-#   other in graph.json/manifest.json.
-# - push to main: safety net for code that lands on main without going
-#   through a PR that ran this workflow (direct pushes, forked PRs where the
-#   head job below is skipped). Only writer touching main, so no conflict risk.
+# - pull_request (opened): rebuilds the graph on the PR head but only
+#   uploads it as a workflow artifact for graphify-impact-check to consume —
+#   it is NOT committed to the PR branch. graphify-out is a generated
+#   JSON/HTML blob whose content isn't line-mergeable; committing it on both
+#   the PR branch and main independently (each regenerated from a different
+#   point in history) is what caused merge conflicts on every PR.
+# - push to main: the only job that ever commits graphify-out, always in
+#   sequence (see concurrency group below), so it never conflicts with
+#   itself and PR branches never carry a divergent copy to conflict with.
 #
 # NOTES before you paste this into another repo:
 # - If the PR comes from a fork, GITHUB_TOKEN cannot push to the fork's head
-#   branch. The pull_request job is skipped automatically in that case (see
-#   the guard step) — the push-to-main job still catches it once merged.
+#   branch, so the guard step below skips the artifact build/upload too —
+#   graphify-impact-check will then just see no impacted-caller context.
+#   graphify-main still updates main once the PR is merged.
 on:
   pull_request:
     types: [opened]
@@ -66,18 +68,13 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: graphify cluster-only . --no-label
 
-      - name: Commit and push graphify-out
+      - name: Upload graphify-out as a build artifact (not committed — see header notes)
         if: steps.guard.outputs.skip != 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add graphify-out/graph.json graphify-out/graph.html graphify-out/GRAPH_REPORT.md graphify-out/manifest.json
-          if git diff --staged --quiet; then
-            echo "graphify-out is already up to date on ${{ github.event.pull_request.head.ref }}"
-          else
-            git commit -m "chore(graphify): update graphify-out [skip ci]"
-            git push origin HEAD:${{ github.event.pull_request.head.ref }}
-          fi
+        uses: actions/upload-artifact@v4
+        with:
+          name: graphify-out
+          path: graphify-out/
+          retention-days: 1
 
   graphify-main:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -113,13 +110,14 @@ jobs:
           fi
 
   # Fails the check if Gemini judges the diff likely to break one of the
-  # callers/importers the committed graph says depend on the changed files.
-  # Needs graphify-pr-head so it reads the freshly rebuilt graph.json, not a
-  # stale one. Structural blast-radius lookup is free (jq against graph.json);
-  # only the compatibility judgment itself calls Gemini. Requires a
-  # GEMINI_API_KEY repo secret. This only re-runs on `opened`, matching
-  # graphify-pr-head above — add `synchronize` to both triggers if you want it
-  # to re-check every new push to the PR, not just the first one.
+  # callers/importers the freshly rebuilt graph says depend on the changed
+  # files. Needs graphify-pr-head so it can download that job's graph.json
+  # artifact instead of reading a stale one committed to the branch.
+  # Structural blast-radius lookup is free (jq against graph.json); only the
+  # compatibility judgment itself calls Gemini. Requires a GEMINI_API_KEY
+  # repo secret. This only re-runs on `opened`, matching graphify-pr-head
+  # above — add `synchronize` to both triggers if you want it to re-check
+  # every new push to the PR, not just the first one.
   graphify-impact-check:
     if: github.event_name == 'pull_request'
     needs: graphify-pr-head
@@ -134,9 +132,16 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
+      - name: Download the freshly built graph (skips cleanly if the PR-head job was skipped, e.g. forked PR)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: graphify-out
+          path: graphify-out/
+
       - name: Find changed files
         run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+          git fetch origin ${{ github.event.pull_request.base.ref }}
           git diff --name-only "origin/${{ github.event.pull_request.base.ref }}...HEAD" \
             -- '*.py' '*.ts' '*.js' > changed_files.txt
           echo "Changed files:"; cat changed_files.txt
