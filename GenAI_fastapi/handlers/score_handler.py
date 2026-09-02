@@ -25,6 +25,7 @@ class ScoreCalculator:
             scores.append(similarity)
         # return np.array(scores)
         # sort best-match-first for more readable score output
+        # intentional
         return np.sort(np.array(scores))[::-1]
 
     @staticmethod
