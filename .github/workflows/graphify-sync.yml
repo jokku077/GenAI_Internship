@@ -213,9 +213,9 @@ jobs:
               body: `${icon} **Graphify impact check (Gemini)**\n\n${body}`
             });
 
-      - name: Fail check if a break was flagged
-        if: steps.judge.outputs.verdict == 'BREAKS'
+      - name: Fail check unless Gemini confirmed it's safe
+        if: steps.judge.outputs.verdict != 'SAFE'
         run: |
-          echo "::error::Gemini flagged a likely breaking change:"
+          echo "::error::Blocking merge — verdict was '${{ steps.judge.outputs.verdict }}', not SAFE:"
           cat verdict.txt
           exit 1
