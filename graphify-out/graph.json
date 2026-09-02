@@ -144,7 +144,7 @@
       "file_type": "code",
       "norm_label": "scorechecker",
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L42"
+      "source_location": "L43"
     },
     {
       "id": "genai_fastapi_services_admin_delete_question",
@@ -348,7 +348,7 @@
       "file_type": "code",
       "norm_label": ".return_max_score_index()",
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L31"
+      "source_location": "L32"
     },
     {
       "id": "genai_fastapi_handlers_score_handler_scorechecker_check_equal_score",
@@ -360,7 +360,7 @@
       "file_type": "code",
       "norm_label": ".check_equal_score()",
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L54"
+      "source_location": "L55"
     },
     {
       "id": "genai_fastapi_handlers_score_handler_scorechecker_check_low_score",
@@ -372,7 +372,7 @@
       "file_type": "code",
       "norm_label": ".check_low_score()",
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L46"
+      "source_location": "L47"
     },
     {
       "id": "genai_fastapi_tests_test_score_handler_test_check_equal_score_detects_duplicate_nonzero_scores",
@@ -1262,7 +1262,7 @@
       "source_location": "L1"
     },
     {
-      "id": "genai_fastapi_handlers_score_handler_rationale_32",
+      "id": "genai_fastapi_handlers_score_handler_rationale_33",
       "label": "Return the index of the highest score.",
       "_origin": "ast",
       "community": 4,
@@ -1270,10 +1270,10 @@
       "file_type": "rationale",
       "norm_label": "return the index of the highest score.",
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L32"
+      "source_location": "L33"
     },
     {
-      "id": "genai_fastapi_handlers_score_handler_rationale_43",
+      "id": "genai_fastapi_handlers_score_handler_rationale_44",
       "label": "Evaluates similarity scores to decide whether a query match is usable.",
       "_origin": "ast",
       "community": 4,
@@ -1281,10 +1281,10 @@
       "file_type": "rationale",
       "norm_label": "evaluates similarity scores to decide whether a query match is usable.",
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L43"
+      "source_location": "L44"
     },
     {
-      "id": "genai_fastapi_handlers_score_handler_rationale_47",
+      "id": "genai_fastapi_handlers_score_handler_rationale_48",
       "label": "Return True only if every score is at or below the 0.3 relevance threshold.",
       "_origin": "ast",
       "community": 4,
@@ -1292,10 +1292,10 @@
       "file_type": "rationale",
       "norm_label": "return true only if every score is at or below the 0.3 relevance threshold.",
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L47"
+      "source_location": "L48"
     },
     {
-      "id": "genai_fastapi_handlers_score_handler_rationale_55",
+      "id": "genai_fastapi_handlers_score_handler_rationale_56",
       "label": "Return True if any two nonzero scores are exactly equal (ambiguous match).",
       "_origin": "ast",
       "community": 4,
@@ -1303,7 +1303,7 @@
       "file_type": "rationale",
       "norm_label": "return true if any two nonzero scores are exactly equal (ambiguous match).",
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L55"
+      "source_location": "L56"
     },
     {
       "id": "genai_fastapi_tests_test_score_handler_rationale_1",
@@ -2480,7 +2480,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L42",
+      "source_location": "L43",
       "weight": 1.0
     },
     {
@@ -2964,7 +2964,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L31",
+      "source_location": "L32",
       "weight": 1.0
     },
     {
@@ -2975,7 +2975,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L46",
+      "source_location": "L47",
       "weight": 1.0
     },
     {
@@ -2986,7 +2986,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L54",
+      "source_location": "L55",
       "weight": 1.0
     },
     {
@@ -3210,47 +3210,47 @@
       "weight": 1.0
     },
     {
-      "source": "genai_fastapi_handlers_score_handler_rationale_32",
+      "source": "genai_fastapi_handlers_score_handler_rationale_33",
       "target": "genai_fastapi_handlers_score_handler_scorecalculator_return_max_score_index",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L32",
+      "source_location": "L33",
       "weight": 1.0
     },
     {
-      "source": "genai_fastapi_handlers_score_handler_rationale_43",
+      "source": "genai_fastapi_handlers_score_handler_rationale_44",
       "target": "genai_fastapi_handlers_score_handler_scorechecker",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L43",
+      "source_location": "L44",
       "weight": 1.0
     },
     {
-      "source": "genai_fastapi_handlers_score_handler_rationale_47",
+      "source": "genai_fastapi_handlers_score_handler_rationale_48",
       "target": "genai_fastapi_handlers_score_handler_scorechecker_check_low_score",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L47",
+      "source_location": "L48",
       "weight": 1.0
     },
     {
-      "source": "genai_fastapi_handlers_score_handler_rationale_55",
+      "source": "genai_fastapi_handlers_score_handler_rationale_56",
       "target": "genai_fastapi_handlers_score_handler_scorechecker_check_equal_score",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "GenAI_fastapi/handlers/score_handler.py",
-      "source_location": "L55",
+      "source_location": "L56",
       "weight": 1.0
     },
     {
@@ -3838,5 +3838,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "2321b92352e0a46660b6e6feb24f6a641490c17b"
+  "built_at_commit": "a7968595357634235f3f7c36d81ea708da9c69e0"
 }
