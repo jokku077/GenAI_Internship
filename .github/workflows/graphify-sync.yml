@@ -124,6 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
@@ -197,9 +198,24 @@ jobs:
           cat verdict.txt
           echo "verdict=$(head -n1 verdict.txt | tr -d '[:space:]')" >> "$GITHUB_OUTPUT"
 
-      - name: Fail check if a break was flagged
-        if: steps.judge.outputs.verdict == 'BREAKS'
+      - name: Post Gemini's verdict as a PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const verdict = '${{ steps.judge.outputs.verdict }}';
+            const icon = verdict === 'BREAKS' ? '⚠️' : verdict === 'ERROR' ? '❌' : '✅';
+            const body = fs.readFileSync('verdict.txt', 'utf8');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `${icon} **Graphify impact check (Gemini)**\n\n${body}`
+            });
+
+      - name: Fail check unless Gemini confirmed it's safe
+        if: steps.judge.outputs.verdict != 'SAFE'
         run: |
-          echo "::error::Gemini flagged a likely breaking change:"
+          echo "::error::Blocking merge — verdict was '${{ steps.judge.outputs.verdict }}', not SAFE:"
           cat verdict.txt
           exit 1
