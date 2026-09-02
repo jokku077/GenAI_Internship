@@ -23,7 +23,9 @@ class ScoreCalculator:
             question_embedding = question_embeddings[i]
             similarity = cosine_similarity([query_embedding], [question_embedding])[0][0]
             scores.append(similarity)
-        return np.array(scores)
+        # return np.array(scores)
+        # sort best-match-first for more readable score output
+        return np.sort(np.array(scores))[::-1]
 
     @staticmethod
     def return_max_score_index(scores):
