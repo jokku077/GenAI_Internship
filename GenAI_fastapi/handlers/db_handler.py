@@ -1,19 +1,28 @@
 """Handlers implementing CRUD and similarity-search operations on the chatbot knowledge base."""
-from utils.db_utils import chat_db
-from models.admin import ConfirmationResponse, AddNewQA, FindSimilarQA, UpdateQA
-from handlers.embeddings_handler import EmbeddingsGenerator
-from fastapi import HTTPException
-from handlers.score_handler import ScoreCalculator
+from typing import Any
 
-from utils.db_utils import DbFetcher
+from fastapi import HTTPException
+
+from handlers.embeddings_handler import EmbeddingsGenerator
+from handlers.score_handler import ScoreCalculator
+from models.admin import AddNewQA, ConfirmationResponse, FindSimilarQA, UpdateQA
+from utils.db_utils import DbFetcher, chat_db
 
 class DbHandler:
     """Encapsulates database operations for the chatbot Q&A collection."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.collection = chat_db
 
-    def add_question_handler(self, request) -> ConfirmationResponse:
+    @staticmethod
+    def _generate_question_embeddings(question: str) -> list[float]:
+        """Generate embeddings for a question and normalize failures to HTTP 500."""
+        try:
+            return EmbeddingsGenerator.generate_embeddings(question)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Error generating embeddings: {exc}") from exc
+
+    def add_question_handler(self, request: AddNewQA) -> ConfirmationResponse:
         """Insert a new Q&A entry with generated embeddings.
 
         Raises:
@@ -25,17 +34,13 @@ class DbHandler:
         if existing:
             raise HTTPException(status_code=409, detail=f"Question with index {request.new_index} already exists")
 
-        # Generate embeddings
-        try:
-            question_embedding = EmbeddingsGenerator.generate_embeddings(request.new_question)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error generating embeddings: {str(e)}")
+        question_embedding = self._generate_question_embeddings(request.new_question)
 
         new_doc = {
             "index": request.new_index,
             "question": request.new_question,
             "answer": request.new_answer,
-            "embeddings": question_embedding
+            "embeddings": question_embedding,
         }
 
         result = self.collection.insert_one(new_doc)
@@ -49,7 +54,7 @@ class DbHandler:
             index=request.new_index,
         )
 
-    def find_similar_question_handler(self, request):
+    def find_similar_question_handler(self, request: FindSimilarQA) -> dict[str, Any]:
         """Find the knowledge-base question most similar to the search query.
 
         Returns:
@@ -59,23 +64,30 @@ class DbHandler:
             HTTPException: 404 if the matched question is not found in the database.
         """
         questions = DbFetcher.fetch_questions()
+        if not questions:
+            raise HTTPException(status_code=404, detail="No questions available in database")
+
         scores = ScoreCalculator.calculate_scores(request.search_query)
-        max_score_index = scores.argmax(axis=0)
+        if len(scores) == 0:
+            raise HTTPException(status_code=404, detail="No similarity scores could be computed")
+        if len(scores) != len(questions):
+            raise HTTPException(status_code=500, detail="Mismatch between questions and similarity scores")
+
+        max_score_index = int(scores.argmax(axis=0))
         similar_question = questions[max_score_index]
 
-        result = self.collection.find_one(
-            {"question": similar_question})  # getting the object containing the most similar question
+        result = self.collection.find_one({"question": similar_question})
         if not result:
             raise HTTPException(status_code=404, detail="Similar question not found in database")
 
-        question_index = result.get("index")  # extracting the index
+        question_index = result.get("index")
         return {
             "most_similar_question": similar_question,
             "index_of_most_similar_question": question_index,
-            "score": float(scores[max_score_index])
+            "score": float(scores[max_score_index]),
         }
 
-    def delete_question_handler(self, index) -> ConfirmationResponse:
+    def delete_question_handler(self, index: int) -> ConfirmationResponse:
         """Delete the question at the given index.
 
         Raises:
@@ -85,14 +97,18 @@ class DbHandler:
         document = self.collection.find_one({"index": index})
         if not document:
             raise HTTPException(status_code=404, detail=f"Question with index {index} not found")
-        result = chat_db.delete_one({"index": index})
+        result = self.collection.delete_one({"index": index})
 
         if result.deleted_count == 1:
-            return ConfirmationResponse(message=f"Question with index: {index} successfully deleted")
-        else:
-            raise HTTPException(status_code=500, detail="Failed to delete the question")
+            return ConfirmationResponse(
+                success=True,
+                message=f"Question with index: {index} successfully deleted",
+                index=index,
+            )
 
-    def update_question_handler(self, index, update_data) -> ConfirmationResponse:
+        raise HTTPException(status_code=500, detail="Failed to delete the question")
+
+    def update_question_handler(self, index: int, update_data: UpdateQA) -> ConfirmationResponse:
         """Update the question and/or answer at the given index.
 
         Regenerates embeddings only if the document already has an
@@ -112,7 +128,7 @@ class DbHandler:
             update_fields["question"] = update_data.question
 
             if "embeddings" in document:
-                new_embeddings = EmbeddingsGenerator.generate_embeddings(update_data.question)  # generating embeddings for the new question
+                new_embeddings = self._generate_question_embeddings(update_data.question)
                 update_fields["embeddings"] = new_embeddings
 
         if update_data.answer is not None:
@@ -121,13 +137,21 @@ class DbHandler:
         if update_fields:  # runs only if data is provided in payload
             result = self.collection.update_one(
                 {"index": index},
-                {"$set": update_fields}
+                {"$set": update_fields},
             )
 
             if result.modified_count == 1:
-                return ConfirmationResponse(message=f"Question with index {index} successfully updated")
-            else:
-                return ConfirmationResponse(message=f"No changes made to question with index {index}")
-        else:
-            return ConfirmationResponse(message="No update data provided")
+                return ConfirmationResponse(
+                    success=True,
+                    message=f"Question with index {index} successfully updated",
+                    index=index,
+                )
+
+            return ConfirmationResponse(
+                success=True,
+                message=f"No changes made to question with index {index}",
+                index=index,
+            )
+
+        return ConfirmationResponse(success=True, message="No update data provided", index=index)
 
