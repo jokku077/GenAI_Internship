@@ -1,0 +1,23 @@
+# Global default owner
+* @GSebastian1
+
+# API entry and route layer
+/GenAI_fastapi/main.py @GSebastian1
+/GenAI_fastapi/services/ @GSebastian1
+
+# Core business logic and data/embedding logic
+/GenAI_fastapi/handlers/ @GSebastian1
+
+# Data models and DB utilities
+/GenAI_fastapi/models/ @GSebastian1
+/GenAI_fastapi/utils/ @GSebastian1
+
+# Tests require owner review
+/GenAI_fastapi/tests/ @GSebastian1
+
+# One-off scripts and maintenance tooling
+/GenAI_fastapi/miscellaneous/ @GSebastian1
+
+# Workflow/config guardrails
+/.github/workflows/ @GSebastian1
+/.github/copilot-instructions.md @GSebastian1

@@ -107,6 +107,27 @@ Tests mock the database and embeddings calls, so no live MongoDB or Gemini API a
 is required. `tests/conftest.py` stubs `GOOGLE_API_KEY` and `MONGODB_URI` so the
 `config` module can be imported safely during test collection.
 
+## Pull Request and Code Review Process
+
+Use small, focused PRs aligned to this structure:
+- `services/` for API route orchestration
+- `handlers/` for core business logic
+- `models/` and `utils/` for schemas and DB helpers
+- `tests/` for validation of changed behavior
+
+Before opening a PR:
+1. Run `pytest` from `GenAI_fastapi/`.
+2. Add or update tests for any logic change.
+3. Document API contract impacts (endpoints, payloads, status codes).
+4. Ensure no secrets/config values are hardcoded.
+5. Use the PR template checklist and request review from CODEOWNERS.
+6. Request a GitHub Copilot code review from the PR reviewers panel before human approval.
+
+Copilot usage expectations:
+- Treat Copilot output as a draft and validate correctness.
+- Prefer project conventions (thin routes, handler-centric logic, mocked externals in tests).
+- Remove dead code/imports and keep naming explicit.
+
 ## Codebase Architecture Graph
 
 This repository includes a generated knowledge graph (via the `graphify` tool)
